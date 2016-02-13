@@ -226,15 +226,6 @@ describe("Scope", function() {
             expect(scope.counter).toBe(1);
         });
 
-    });
-
-    describe("eval", function() {
-
-        var scope;
-        beforeEach(function() {
-            scope = new Scope();
-        });
-
         it("executes $eval'd function and returns result", function() {
             scope.aValue = 42;
 
@@ -253,15 +244,6 @@ describe("Scope", function() {
             }, 2);
 
             expect(result).toBe(44);
-        });
-
-    });
-
-    describe("apply", function() {
-
-        var scope;
-        beforeEach(function() {
-            scope = new Scope();
         });
 
         it("executes $apply'd functions and starts the digest", function() {
@@ -284,15 +266,6 @@ describe("Scope", function() {
                 scope.aValue = 'someOtherValue';
             });
             expect(scope.counter).toBe(2);
-        });
-
-    });
-
-    describe("evalAsync", function() {
-
-        var scope;
-        beforeEach(function() {
-            scope = new Scope();
         });
 
         it("executes $evalAsync'd functions later in the same cycle", function() {
@@ -367,6 +340,97 @@ describe("Scope", function() {
             );
 
             expect(function() { scope.$digest(); }).toThrow();
+        });
+
+        it("has a $$phase field whose value is the current phase", function() {
+            scope.aValue = [1, 2, 3];
+            scope.phaseInWatchFunction = undefined;
+            scope.phaseInListenerFunction = undefined;
+            scope.phaseInApplyFunction = undefined;
+
+            scope.$watch(
+                function(scope) {
+                    scope.phaseInWatchFunction = scope.$$phase;
+                    return scope.aValue;
+                },
+                function(newValue, oldValue, scope) {
+                    scope.phaseInListenerFunction = scope.$$phase;
+                }
+            );
+
+            scope.$apply(function(scope) {
+                scope.phaseInApplyFunction = scope.$$phase;
+            });
+
+            expect(scope.phaseInWatchFunction).toBe('$digest');
+            expect(scope.phaseInListenerFunction).toBe('$digest');
+            expect(scope.phaseInApplyFunction).toBe('$apply');
+        });
+
+        it("schedules a digest in $evalAsync", function(done) {
+            scope.aValue = "abc";
+            scope.counter = 0;
+
+            scope.$watch(
+                function(scope) { return scope.aValue; },
+                function(newValue, oldValue, scope) {
+                    scope.counter++;
+                }
+            );
+
+            scope.$evalAsync(function(scope) { });
+
+            expect(scope.counter).toBe(0);
+
+            setTimeout(function() {
+                expect(scope.counter).toBe(1);
+                done();
+            }, 50);
+        });
+
+        it("allows async $apply with $applyAsync", function(done) {
+            scope.counter = 0;
+
+            scope.$watch(
+                function(scope) { return scope.aValue; },
+                function(newValue, oldValue, scope) {
+                    scope.counter++;
+                }
+            );
+
+            scope.$digest();
+            expect(scope.counter).toBe(1);
+
+            scope.$applyAsync(function(scope) {
+                scope.aValue = 'abc';
+            });
+            expect(scope.counter).toBe(1);
+
+            setTimeout(function() {
+                expect(scope.counter).toBe(2);
+                done();
+            }, 50);
+        });
+
+        it("never executes $applyAsync'd function in the same cycle", function(done) {
+            scope.aValue = [1, 2, 3];
+            scope.asyncApplied = false;
+
+            scope.$watch(
+                function(scope) { return scope.aValue; },
+                function(newValue, oldValue, scope) {
+                    scope.$applyAsync(function(scope) {
+                         scope.asyncApplied = true;
+                    });
+                }
+            );
+
+            scope.$digest();
+            expect(scope.asyncApplied).toBe(false);
+            setTimeout(function() {
+                expect(scope.asyncApplied).toBe(true);
+                done();
+            }, 50);
         });
 
     });
